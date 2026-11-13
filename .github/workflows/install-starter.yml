@@ -1,0 +1,32 @@
+
+name: Install APF Starter
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract starter files
+        run: |
+          test -f ai-publishing-factory-v0.1.1.zip
+          unzip -q -o ai-publishing-factory-v0.1.1.zip -d /tmp/apf
+          cp -R /tmp/apf/ai-publishing-factory-v0.1.1/. .
+          rm ai-publishing-factory-v0.1.1.zip
+
+      - name: Commit starter
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Install AI Publishing Factory v0.1.1"
+            git push
+          fi
