@@ -14,6 +14,7 @@ jobs:
   inspect-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -63,7 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip pytest
+          python -m pip install --upgrade pip pytest pydantic
 
           requirements="$(find "$APF_ROOT" -type f -name requirements.txt -print -quit)"
           if [ -n "$requirements" ]; then
