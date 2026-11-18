@@ -1,0 +1,85 @@
+name: Test APF Release Archive
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "APF-v0.1.2.zip"
+      - ".github/workflows/test-release-archive.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify archive integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s APF-v0.1.2.zip
+          sha256sum APF-v0.1.2.zip
+          unzip -t APF-v0.1.2.zip
+
+      - name: Extract into isolated temporary directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/apf-release"
+          unzip -q APF-v0.1.2.zip -d "$RUNNER_TEMP/apf-release"
+          echo "APF_ROOT=$RUNNER_TEMP/apf-release" >> "$GITHUB_ENV"
+          echo "Archive contents:"
+          find "$RUNNER_TEMP/apf-release" -maxdepth 5 -type f -print | sort
+
+      - name: Validate Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import py_compile
+          from pathlib import Path
+
+          root = Path(os.environ["APF_ROOT"])
+          files = sorted(root.rglob("*.py"))
+          if not files:
+              print("No Python files found; syntax check not applicable.")
+          else:
+              for source in files:
+                  py_compile.compile(
+                      str(source),
+                      cfile=f"/tmp/{source.stem}-{abs(hash(source))}.pyc",
+                      doraise=True,
+                  )
+              print(f"Python syntax check passed for {len(files)} file(s).")
+          PY
+
+      - name: Install test dependencies and run available tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip pytest
+
+          requirements="$(find "$APF_ROOT" -type f -name requirements.txt -print -quit)"
+          if [ -n "$requirements" ]; then
+            python -m pip install -r "$requirements"
+          fi
+
+          test_dir="$(find "$APF_ROOT" -type d -name tests -print -quit)"
+          test_file="$(find "$APF_ROOT" -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit)"
+
+          if [ -n "$test_dir" ]; then
+            python -m pytest -q "$test_dir"
+          elif [ -n "$test_file" ]; then
+            python -m pytest -q "$APF_ROOT"
+          else
+            echo "::warning::Archive contains no discoverable pytest tests; integrity and syntax checks ran, but behavioral tests were not available."
+          fi
+
+      - name: Confirm checkout was not modified
+        run: git status --short
